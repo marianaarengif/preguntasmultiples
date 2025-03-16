@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -9,10 +9,13 @@ public class GameController : MonoBehaviour
 {
     string lineaLeida = "";
     List<PreguntaMultiple> listaPreguntasMultiples;
-    List<PreguntaMultiple> preguntasDisponibles;
-    PreguntaMultiple preguntaActual;
+    List<PreguntaFalsoVerdadero> listaPreguntasFV;
+    List<PreguntaAbierta> listaPreguntasAbiertas;
 
-    string respuestaPM;
+    List<object> preguntasDisponibles;
+    int rondaActual = 1; // 1 = Fácil, 2 = Difícil
+    object preguntaActual;
+    string respuestaCorrecta;
 
     public TextMeshProUGUI textPregunta;
     public TextMeshProUGUI textResp1;
@@ -20,87 +23,167 @@ public class GameController : MonoBehaviour
     public TextMeshProUGUI textResp3;
     public TextMeshProUGUI textResp4;
 
+    public GameObject panelPreguntasMultiples;
+    public GameObject panelPreguntasFV;
+    public GameObject panelPreguntasAbiertas;
+
     public GameObject panelCorrecto;
     public GameObject panelIncorrecto;
 
     void Start()
     {
         listaPreguntasMultiples = new List<PreguntaMultiple>();
-        preguntasDisponibles = new List<PreguntaMultiple>();
+        listaPreguntasFV = new List<PreguntaFalsoVerdadero>();
+        listaPreguntasAbiertas = new List<PreguntaAbierta>();
+
+        preguntasDisponibles = new List<object>();
+
         LecturaPreguntasMultiples();
-        mostrarPreguntasMultiples();
+        LecturaPreguntasFalsoVerdadero();
+        LecturaPreguntasAbiertas();
+
+        CargarPreguntasFaciles();
+        MostrarPregunta();
     }
 
-    public void mostrarPreguntasMultiples()
+    public void CargarPreguntasFaciles()
+    {
+        preguntasDisponibles.Clear();
+        preguntasDisponibles.AddRange(listaPreguntasMultiples.FindAll(p => p.Dificultad.ToLower() == "facil"));
+        preguntasDisponibles.AddRange(listaPreguntasFV.FindAll(p => p.Dificultad.ToLower() == "facil"));
+        preguntasDisponibles.AddRange(listaPreguntasAbiertas.FindAll(p => p.Dificultad.ToLower() == "facil"));
+    }
+
+    public void CargarPreguntasDificiles()
+    {
+        preguntasDisponibles.Clear();
+        preguntasDisponibles.AddRange(listaPreguntasMultiples.FindAll(p => p.Dificultad.ToLower() == "dificil"));
+        preguntasDisponibles.AddRange(listaPreguntasFV.FindAll(p => p.Dificultad.ToLower() == "dificil"));
+        preguntasDisponibles.AddRange(listaPreguntasAbiertas.FindAll(p => p.Dificultad.ToLower() == "dificil"));
+    }
+
+    public void MostrarPregunta()
     {
         if (preguntasDisponibles.Count == 0)
         {
-            preguntasDisponibles.AddRange(listaPreguntasMultiples);
+            if (rondaActual == 1)
+            {
+                rondaActual = 2;
+                CargarPreguntasDificiles();
+                MostrarPregunta();
+            }
+            else
+            {
+                Debug.Log("Juego terminado.");
+            }
+            return;
         }
 
         int index = UnityEngine.Random.Range(0, preguntasDisponibles.Count);
         preguntaActual = preguntasDisponibles[index];
         preguntasDisponibles.RemoveAt(index);
 
-        textPregunta.text = preguntaActual.Pregunta;
-        textResp1.text = preguntaActual.Respuesta1;
-        textResp2.text = preguntaActual.Respuesta2;
-        textResp3.text = preguntaActual.Respuesta3;
-        textResp4.text = preguntaActual.Respuesta4;
-        respuestaPM = preguntaActual.RespuestaCorrecta;
+        panelPreguntasMultiples.SetActive(false);
+        panelPreguntasFV.SetActive(false);
+        panelPreguntasAbiertas.SetActive(false);
+
+        if (preguntaActual is PreguntaMultiple pm)
+        {
+            textPregunta.text = pm.Pregunta;
+            textResp1.text = pm.Respuesta1;
+            textResp2.text = pm.Respuesta2;
+            textResp3.text = pm.Respuesta3;
+            textResp4.text = pm.Respuesta4;
+            respuestaCorrecta = pm.RespuestaCorrecta;
+
+            panelPreguntasMultiples.SetActive(true);
+        }
+        else if (preguntaActual is PreguntaFalsoVerdadero pfv)
+        {
+            textPregunta.text = pfv.Pregunta;
+            respuestaCorrecta = pfv.RespuestaCorrecta ? "Verdadero" : "Falso";
+
+            panelPreguntasFV.SetActive(true);
+        }
+        else if (preguntaActual is PreguntaAbierta pa)
+        {
+            textPregunta.text = pa.Pregunta;
+            respuestaCorrecta = pa.RespuestaCorrecta;
+
+            panelPreguntasAbiertas.SetActive(true);
+        }
     }
 
-    public void comprobarRespuesta(TextMeshProUGUI respuestaSeleccionada)
+    public void ComprobarRespuesta(TextMeshProUGUI respuestaSeleccionada)
     {
-        if (respuestaSeleccionada.text.Equals(respuestaPM))
-        {
-            panelCorrecto.SetActive(true);
-            panelIncorrecto.SetActive(false);
-        }
-        else
-        {
-            panelCorrecto.SetActive(false);
-            panelIncorrecto.SetActive(true);
-        }
+        bool esCorrecta = respuestaSeleccionada.text.Equals(respuestaCorrecta, StringComparison.OrdinalIgnoreCase);
+        panelCorrecto.SetActive(esCorrecta);
+        panelIncorrecto.SetActive(!esCorrecta);
     }
 
-    public void siguientePregunta()
+    public void MostrarRespuesta()
+    {
+        textPregunta.text += "\n\nRespuesta: " + respuestaCorrecta;
+    }
+
+    public void SiguientePregunta()
     {
         panelCorrecto.SetActive(false);
         panelIncorrecto.SetActive(false);
-        mostrarPreguntasMultiples();
+        MostrarPregunta();
     }
 
     public void LecturaPreguntasMultiples()
     {
         try
         {
-            StreamReader sr1 = new StreamReader("Assets/Files/ArchivoPreguntasM.txt");
-            while ((lineaLeida = sr1.ReadLine()) != null)
+            StreamReader sr = new StreamReader("Assets/Files/ArchivoPreguntasM.txt");
+            while ((lineaLeida = sr.ReadLine()) != null)
             {
-                string[] lineaPartida = lineaLeida.Split("-");
-                string pregunta = lineaPartida[0];
-                string respuesta1 = lineaPartida[1];
-                string respuesta2 = lineaPartida[2];
-                string respuesta3 = lineaPartida[3];
-                string respuesta4 = lineaPartida[4];
-                string respuestaCorrecta = lineaPartida[5];
-                string versiculo = lineaPartida[6];
-                string dificultad = lineaPartida[7].Trim();
-
-                if (dificultad.ToLower() == "facil")
-                {
-                    PreguntaMultiple objPM = new PreguntaMultiple(pregunta, respuesta1, respuesta2, respuesta3, respuesta4, respuestaCorrecta, versiculo, dificultad);
-                    listaPreguntasMultiples.Add(objPM);
-                }
+                string[] linea = lineaLeida.Split("-");
+                listaPreguntasMultiples.Add(new PreguntaMultiple(linea[0], linea[1], linea[2], linea[3], linea[4], linea[5], linea[6], linea[7].Trim()));
             }
-            sr1.Close();
-            Debug.Log("El tama�o de la lista es " + listaPreguntasMultiples.Count);
+            sr.Close();
         }
         catch (Exception e)
         {
-            Debug.Log("ERROR!!!!! " + e.ToString());
+            Debug.Log("Error en preguntas múltiples: " + e);
+        }
+    }
+
+    public void LecturaPreguntasFalsoVerdadero()
+    {
+        try
+        {
+            StreamReader sr = new StreamReader("Assets/Files/preguntasFalso_Verdadero.txt");
+            while ((lineaLeida = sr.ReadLine()) != null)
+            {
+                string[] linea = lineaLeida.Split("-");
+                listaPreguntasFV.Add(new PreguntaFalsoVerdadero(linea[0], linea[1].ToLower() == "true", linea[2], linea[3].Trim()));
+            }
+            sr.Close();
+        }
+        catch (Exception e)
+        {
+            Debug.Log("Error en preguntas F/V: " + e);
+        }
+    }
+
+    public void LecturaPreguntasAbiertas()
+    {
+        try
+        {
+            StreamReader sr = new StreamReader("Assets/Files/ArchivoPreguntasAbiertas.txt");
+            while ((lineaLeida = sr.ReadLine()) != null)
+            {
+                string[] linea = lineaLeida.Split("-");
+                listaPreguntasAbiertas.Add(new PreguntaAbierta(linea[0], linea[1], linea[2], linea[3].Trim()));
+            }
+            sr.Close();
+        }
+        catch (Exception e)
+        {
+            Debug.Log("Error en preguntas abiertas: " + e);
         }
     }
 }
-
